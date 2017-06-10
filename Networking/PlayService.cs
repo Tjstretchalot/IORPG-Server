@@ -219,6 +219,9 @@ namespace IORPG.Networking
                                     case SpellFactory.LESSER_HEAL_INDEX:
                                         TryCastLesserHeal(parsed);
                                         break;
+                                    case SpellFactory.GREATER_HEAL_INDEX:
+                                        TryCastGreaterHeal(parsed);
+                                        break;
                                     default:
                                         throw new InvalidProgramException($"unknown spell for priest: {spellIndex}");
                                 }
@@ -303,6 +306,29 @@ namespace IORPG.Networking
                 return;
 
             var mut = new EntityCastSpellMutation(Entity.ID, SpellFactory.CreateLesserHeal(targetEnt.ID));
+            Program.QueuedMutations[mut.Time].Enqueue(mut);
+            _CastingSpell = true;
+            UpdateVelocity();
+        }
+
+        void TryCastGreaterHeal(JToken parsed)
+        {
+            if (Entity.SpellCooldowns.ContainsKey(SpellFactory.GREATER_HEAL_INDEX))
+                return;
+
+            var currWorld = Program.State.World;
+            var currEnt = currWorld.GetByID(Entity.ID);
+            if (!ManaCheck(currEnt, SpellFactory.GREATER_HEAL_MANA))
+                return;
+            Entity targetEnt;
+            if (!TryGetTargetFromPosition(parsed[2], currWorld, out targetEnt))
+                return;
+            if (targetEnt.Team != currEnt.Team)
+                return;
+            if (!SpellFactory.CheckRange(currEnt, targetEnt, SpellFactory.GREATER_HEAL_RANGE))
+                return;
+
+            var mut = new EntityCastSpellMutation(Entity.ID, SpellFactory.CreateGreaterHeal(targetEnt.ID));
             Program.QueuedMutations[mut.Time].Enqueue(mut);
             _CastingSpell = true;
             UpdateVelocity();

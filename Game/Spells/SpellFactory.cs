@@ -14,8 +14,14 @@ namespace IORPG.Game.Spells
         public const int LESSER_HEAL_INDEX = 0; // note that this isn't actually unique - it's unique *per unit* (i.e. no unit has two spells of the same index)
         public const int LESSER_HEAL_MANA = 20;
         public const int LESSER_HEAL_RANGE = 300;
-        public const int LESSER_HEAL_CAST_TIME = 1500;
-        public const int LESSER_HEAL_HEAL = 20;
+        public const int LESSER_HEAL_CAST_TIME = 1000;
+        public const int LESSER_HEAL_HEAL = 10;
+
+        public const int GREATER_HEAL_INDEX = 1;
+        public const int GREATER_HEAL_MANA = 5;
+        public const int GREATER_HEAL_RANGE = 400;
+        public const int GREATER_HEAL_CAST_TIME = 3000;
+        public const int GREATER_HEAL_HEAL = 30;
 
         public const int SHOOT_INDEX = 0;
         public const int SHOOT_MANA = 10;
@@ -84,6 +90,41 @@ namespace IORPG.Game.Spells
                     world.Entities[index] = new Entity(tarEnt, health: newHP);
                 }
             }));
+        }
+
+        public static SpellInfo CreateGreaterHeal(int targetID)
+        {
+            return new SpellInfo(GREATER_HEAL_INDEX, GREATER_HEAL_CAST_TIME, GREATER_HEAL_CAST_TIME, new LinqSpellTargeter((world) => new[] { targetID }), new LinqSpellEffect((world, caster, targets) =>
+           {
+               if (caster.Mana < GREATER_HEAL_MANA)
+                   return;
+
+               var indexOfCaster = world.Entities.FindIndex((e) => e.ID == caster.ID);
+               if (indexOfCaster < 0)
+                   return;
+
+               world.Entities[indexOfCaster] = new Entity(caster, mana: caster.Mana - GREATER_HEAL_MANA);
+
+               foreach(var target in targets)
+               {
+                   var index = world.Entities.FindIndex((e) => e.ID == target);
+
+                   if (index < 0)
+                       continue;
+
+                   var tarEnt = world.Entities[index];
+                   if (!CheckRange(caster, tarEnt, GREATER_HEAL_RANGE))
+                       continue;
+
+                   float healing = GREATER_HEAL_HEAL;
+                   caster = Logic.InformModifiers(world, caster, indexOfCaster, (mod) => mod.OnHealing(world, index, indexOfCaster, ref healing));
+                   tarEnt = Logic.InformModifiers(world, tarEnt, index, (mod) => mod.OnBeingHealed(world, indexOfCaster, index, ref healing));
+                   healing = Math.Max(healing, 0);
+
+                   var newHP = Math.Min(tarEnt.Health + healing, tarEnt.Attributes.MaxHealth);
+                   world.Entities[index] = new Entity(tarEnt, health: newHP);
+               }
+           }));
         }
 
         public static SpellInfo CreateShoot(int targetID)
