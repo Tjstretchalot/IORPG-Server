@@ -222,6 +222,9 @@ namespace IORPG.Networking
                                     case SpellFactory.GREATER_HEAL_INDEX:
                                         TryCastGreaterHeal(parsed);
                                         break;
+                                    case SpellFactory.HEALING_STRIKE_INDEX:
+                                        TryCastHealingStrike(parsed);
+                                        break;
                                     default:
                                         throw new InvalidProgramException($"unknown spell for priest: {spellIndex}");
                                 }
@@ -329,6 +332,26 @@ namespace IORPG.Networking
                 return;
 
             var mut = new EntityCastSpellMutation(Entity.ID, SpellFactory.CreateGreaterHeal(targetEnt.ID));
+            Program.QueuedMutations[mut.Time].Enqueue(mut);
+            _CastingSpell = true;
+            UpdateVelocity();
+        }
+        
+        void TryCastHealingStrike(JToken parsed)
+        {
+            if (Entity.SpellCooldowns.ContainsKey(SpellFactory.HEALING_STRIKE_INDEX))
+                return;
+
+            var currWorld = Program.State.World;
+            var currEnt = currWorld.GetByID(Entity.ID);
+            if (!ManaCheck(currEnt, SpellFactory.HEALING_STRIKE_MANA))
+                return;
+            Vector2 target = new Vector2((float)parsed[2]["x"], (float)parsed[2]["y"]);
+            var mind = Polygon2.MinDistance(currEnt.Attributes.Bounds, currEnt.Location, target);
+            if (mind != null && mind.Item2 > SpellFactory.HEALING_STRIKE_RANGE)
+                return;
+
+            var mut = new EntityCastSpellMutation(Entity.ID, SpellFactory.CreateHealingStrike(target));
             Program.QueuedMutations[mut.Time].Enqueue(mut);
             _CastingSpell = true;
             UpdateVelocity();

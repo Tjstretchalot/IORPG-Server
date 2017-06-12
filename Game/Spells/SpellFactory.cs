@@ -1,4 +1,5 @@
 ﻿using IORPG.Util;
+using Microsoft.Xna.Framework;
 using SharpMath2;
 using System;
 using System.Collections.Generic;
@@ -22,6 +23,13 @@ namespace IORPG.Game.Spells
         public const int GREATER_HEAL_RANGE = 400;
         public const int GREATER_HEAL_CAST_TIME = 3000;
         public const int GREATER_HEAL_HEAL = 30;
+
+        public const int HEALING_STRIKE_INDEX = 2;
+        public const int HEALING_STRIKE_MANA = 50;
+        public const int HEALING_STRIKE_RANGE = 300;
+        public const int HEALING_STRIKE_RADIUS = 150;
+        public const int HEALING_STRIKE_CAST_TIME = 2000;
+        public const int HEALING_STRIKE_HEAL = 20;
 
         public const int SHOOT_INDEX = 0;
         public const int SHOOT_MANA = 10;
@@ -125,6 +133,49 @@ namespace IORPG.Game.Spells
                    world.Entities[index] = new Entity(tarEnt, health: newHP);
                }
            }));
+        }
+
+        public static SpellInfo CreateHealingStrike(Vector2 targetWorld)
+        {
+            return new SpellInfo(HEALING_STRIKE_INDEX, HEALING_STRIKE_CAST_TIME, HEALING_STRIKE_CAST_TIME, new LinqSpellTargeter((world) =>
+            {
+                return world.Entities.Where((e) =>
+                {
+                    var mind = Polygon2.MinDistance(e.Attributes.Bounds, e.Location, targetWorld);
+                    return mind == null || mind.Item2 < HEALING_STRIKE_RADIUS;
+                }).Select((e) => e.ID).ToArray();
+            }), new LinqSpellEffect((world, caster, targets) =>
+            {
+                var indexOfCaster = world.Entities.FindIndex((e) => e.ID == caster.ID);
+                if (indexOfCaster < 0)
+                    return;
+
+                world.Entities[indexOfCaster] = new Entity(caster, mana: caster.Mana - HEALING_STRIKE_MANA);
+
+                foreach (var target in targets)
+                {
+
+                    var index = world.Entities.FindIndex((e) => e.ID == target);
+
+                    if (index < 0)
+                        continue;
+
+                    var tarEnt = world.Entities[index];
+                    if (tarEnt.ID == caster.ID)
+                        continue;
+                    if (tarEnt.Team != caster.Team)
+                        continue;
+
+                    float healing = HEALING_STRIKE_HEAL;
+                    caster = Logic.InformModifiers(world, caster, indexOfCaster, (mod) => mod.OnHealing(world, index, indexOfCaster, ref healing));
+                    tarEnt = Logic.InformModifiers(world, tarEnt, index, (mod) => mod.OnBeingHealed(world, indexOfCaster, index, ref healing));
+                    healing = Math.Max(healing, 0);
+
+                    var newHP = Math.Min(tarEnt.Health + healing, tarEnt.Attributes.MaxHealth);
+                    world.Entities[index] = new Entity(tarEnt, health: newHP);
+                }
+
+            }));
         }
 
         public static SpellInfo CreateShoot(int targetID)
