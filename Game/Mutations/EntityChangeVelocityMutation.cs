@@ -22,6 +22,8 @@ namespace IORPG.Game.Mutations
         public void Apply(MutatingWorld world)
         {
             var ind = world.Entities.FindIndex((en) => en.ID == ID);
+            if (ind < 0)
+                return;
             var e = world.Entities[ind];
             world.Entities[ind] = new Entity(e, velocity: NewVelocity);
         }

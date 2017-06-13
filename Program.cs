@@ -49,7 +49,8 @@ namespace IORPG
             while (true)
             {
                 Console.WriteLine("Options:");
-                Console.WriteLine("  [c]heck threads, [s]top threads, get [t]ick rate");
+                Console.WriteLine("  [c]heck threads, [s]top threads, get [t]ick rate, suppress [l]ong tick message");
+                Console.WriteLine("  c[h]ange tick rate");
                 var key = Console.ReadKey();
                 Console.WriteLine();
                 switch(key.KeyChar)
@@ -94,6 +95,23 @@ namespace IORPG
                         Console.WriteLine($"There are {world.Entities.Count} entities");
                         Console.WriteLine();
                         break;
+                    case 'l':
+                        SuppressLongTickMessage = !SuppressLongTickMessage;
+                        Console.WriteLine($"SuppressLongTickMessages is now {SuppressLongTickMessage}");
+                        break;
+                    case 'h':
+                        Console.WriteLine($"New desired tick rate? (Is currently {DesiredTickRate}ms/tick)");
+                        var tickRateStr = Console.ReadLine();
+                        int tickRate;
+                        if(!int.TryParse(tickRateStr, out tickRate))
+                        {
+                            Console.WriteLine("Failed to parse string to int");
+                            break;
+                        }
+
+                        Interlocked.Exchange(ref DesiredTickRate, tickRate);
+                        Console.WriteLine($"Tick rate is now {DesiredTickRate}ms/tick");
+                        break;
                     default:
                         Console.WriteLine("Unrecognized char!");
                         break;
@@ -102,10 +120,12 @@ namespace IORPG
         }
 
         private static int ShouldSendTick = 0;
+        private static volatile int DesiredTickRate = 16;
         private static volatile bool StopRequested;
         private static volatile int MissedUpdateMS;
         private static ConcurrentQueue<int> RecentTickTimes;
         private static volatile int RecentTickTimesSum;
+        private static volatile bool SuppressLongTickMessage;
 
         public static GameState State;
         public static ConcurrentDictionary<WorldMutationTime, ConcurrentQueue<IWorldMutation>> QueuedMutations;
@@ -123,11 +143,13 @@ namespace IORPG
             QueuedMutations.TryAdd(WorldMutationTime.BeforeEntitiesTick, new ConcurrentQueue<IWorldMutation>());
             RecentTickTimes = new ConcurrentQueue<int>();
 
+            int considerChangeTickrateCounter = 0;
             var random = new Random();
-            int desiredMs = 16;
+            long lastWarningTime = 0;
             var watch = new Stopwatch();
             while(!StopRequested)
             {
+                var desiredMs = DesiredTickRate;
                 watch.Restart();
                 var mut = Logic.SimulateTimePassing(State.World, random, QueuedMutations, desiredMs);
                 State.World = mut.AsReadOnly();
@@ -139,7 +161,6 @@ namespace IORPG
 
                 Interlocked.Exchange(ref ShouldSendTick, 1);
                 int timeTaken = (int)watch.ElapsedMilliseconds;
-
                 RecentTickTimes.Enqueue(timeTaken);
                 RecentTickTimesSum += timeTaken;
 
@@ -152,7 +173,31 @@ namespace IORPG
                 
                 if(timeTaken > desiredMs)
                 {
+
                     MissedUpdateMS = Math.Min(MissedUpdateMS + timeTaken - desiredMs, 1000);
+                    considerChangeTickrateCounter++;
+
+                    if(considerChangeTickrateCounter > 1000)
+                    {
+                        int tickSpeed = RecentTickTimesSum / RecentTickTimes.Count;
+
+                        if(tickSpeed > DesiredTickRate)
+                        {
+                            Console.WriteLine($"WARNING: Average tick speed is greater than desired tick rate. Adjusting DesiredTickRate to {tickSpeed + 1}");
+                            Interlocked.Exchange(ref DesiredTickRate, tickSpeed + 1);
+                        }
+                    }
+
+                    if (!SuppressLongTickMessage)
+                    {
+                        var now = (DateTime.UtcNow.Ticks - 621355968000000000) / 10000;
+                        if (now - lastWarningTime > 1000)
+                        {
+                            Console.WriteLine($"{DateTime.UtcNow} WARNING: Tick took too long (desired {desiredMs}ms but took {timeTaken}ms)");
+                            lastWarningTime = now;
+                        }
+                    }
+                    
                 }else
                 {
                     var sleepTime = desiredMs - timeTaken;

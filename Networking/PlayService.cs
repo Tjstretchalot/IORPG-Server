@@ -36,6 +36,8 @@ namespace IORPG.Networking
 
         const int CAST_SPELL = 5;
 
+        const int CHANGE_TICK_RATE = 6;
+
         const int DIR_RIGHT = 1;
         const int DIR_LEFT = 2;
         const int DIR_UP = 3;
@@ -51,17 +53,33 @@ namespace IORPG.Networking
 
         private int LastMarkersTimestamp;
 
+        private int TicksNotSentCounter;
+        private int RequestedTicksPerSentTick;
+
         public PlayService()
         {
             _UserState = UserState.NOT_YET_SPAWNED;
             Entity = null;
             LastMarkersTimestamp = 0;
+            RequestedTicksPerSentTick = 1;
         }
 
         public void SendTick(World world)
         {
             if(_UserState == UserState.SPAWNED)
             {
+                if(RequestedTicksPerSentTick != 1)
+                {
+                    TicksNotSentCounter++;
+                    if(TicksNotSentCounter == RequestedTicksPerSentTick)
+                    {
+                        TicksNotSentCounter = 0;
+                    }else
+                    {
+                        return;
+                    }
+                }
+
                 int entIndex;
                 if(!world.EntityIDToIndex.TryGetValue(Entity.ID, out entIndex))
                 {
@@ -229,6 +247,17 @@ namespace IORPG.Networking
                                         throw new InvalidProgramException($"unknown spell for priest: {spellIndex}");
                                 }
                                 break;
+                        }
+                        break;
+                    case CHANGE_TICK_RATE:
+                        bool increase = (bool)parsed[1];
+
+                        if(increase)
+                        {
+                            RequestedTicksPerSentTick ++;
+                        }else
+                        {
+                            RequestedTicksPerSentTick = Math.Max(RequestedTicksPerSentTick - 1, 1);
                         }
                         break;
                     default:
