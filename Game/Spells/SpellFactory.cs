@@ -71,31 +71,28 @@ namespace IORPG.Game.Spells
             {
                 if (caster.Mana < LESSER_HEAL_MANA)
                     return; // whiffs
-
-                var indexOfCaster = world.Entities.FindIndex((e) => e.ID == caster.ID);
-                if (indexOfCaster < 0)
+                
+                if (!world.Entities.ContainsKey(caster.ID))
                     return; // weird state
 
-                world.Entities[indexOfCaster] = new Entity(caster, mana: caster.Mana - LESSER_HEAL_MANA);
+                world.Entities[caster.ID] = new Entity(caster, mana: caster.Mana - LESSER_HEAL_MANA);
 
                 foreach(var target in targets)
                 {
-                    var index = world.Entities.FindIndex((e) => e.ID == target);
-
-                    if (index < 0)
+                    Entity tarEnt;
+                    if(!world.Entities.TryGetValue(target, out tarEnt))
                         continue;
-
-                    var tarEnt = world.Entities[index];
+                    
                     if (!CheckRange(caster, tarEnt, LESSER_HEAL_RANGE))
                         continue;
 
                     float healing = LESSER_HEAL_HEAL;
-                    caster = Logic.InformModifiers(world, caster, indexOfCaster, (mod) => mod.OnHealing(world, index, indexOfCaster, ref healing));
-                    tarEnt = Logic.InformModifiers(world, tarEnt, index, (mod) => mod.OnBeingHealed(world, indexOfCaster, index, ref healing));
+                    caster = Logic.InformModifiers(world, caster, (mod) => mod.OnHealing(world, target, caster.ID, ref healing));
+                    tarEnt = Logic.InformModifiers(world, tarEnt, (mod) => mod.OnBeingHealed(world, caster.ID, target, ref healing));
                     healing = Math.Max(healing, 0);
 
                     var newHP = Math.Min(tarEnt.Health + healing, tarEnt.Attributes.MaxHealth);
-                    world.Entities[index] = new Entity(tarEnt, health: newHP);
+                    world.Entities[target] = new Entity(tarEnt, health: newHP);
                 }
             }));
         }
@@ -107,30 +104,27 @@ namespace IORPG.Game.Spells
                if (caster.Mana < GREATER_HEAL_MANA)
                    return;
 
-               var indexOfCaster = world.Entities.FindIndex((e) => e.ID == caster.ID);
-               if (indexOfCaster < 0)
-                   return;
+               if (!world.Entities.ContainsKey(caster.ID))
+                   return; // weird state
 
-               world.Entities[indexOfCaster] = new Entity(caster, mana: caster.Mana - GREATER_HEAL_MANA);
+               world.Entities[caster.ID] = new Entity(caster, mana: caster.Mana - GREATER_HEAL_MANA);
 
                foreach(var target in targets)
                {
-                   var index = world.Entities.FindIndex((e) => e.ID == target);
-
-                   if (index < 0)
+                   Entity tarEnt;
+                   if (!world.Entities.TryGetValue(target, out tarEnt))
                        continue;
 
-                   var tarEnt = world.Entities[index];
                    if (!CheckRange(caster, tarEnt, GREATER_HEAL_RANGE))
                        continue;
 
                    float healing = GREATER_HEAL_HEAL;
-                   caster = Logic.InformModifiers(world, caster, indexOfCaster, (mod) => mod.OnHealing(world, index, indexOfCaster, ref healing));
-                   tarEnt = Logic.InformModifiers(world, tarEnt, index, (mod) => mod.OnBeingHealed(world, indexOfCaster, index, ref healing));
+                   caster = Logic.InformModifiers(world, caster, (mod) => mod.OnHealing(world, target, caster.ID, ref healing));
+                   tarEnt = Logic.InformModifiers(world, tarEnt, (mod) => mod.OnBeingHealed(world, caster.ID, target, ref healing));
                    healing = Math.Max(healing, 0);
 
                    var newHP = Math.Min(tarEnt.Health + healing, tarEnt.Attributes.MaxHealth);
-                   world.Entities[index] = new Entity(tarEnt, health: newHP);
+                   world.Entities[target] = new Entity(tarEnt, health: newHP);
                }
            }));
         }
@@ -141,38 +135,33 @@ namespace IORPG.Game.Spells
             {
                 return world.Entities.Where((e) =>
                 {
-                    var mind = Polygon2.MinDistance(e.Attributes.Bounds, e.Location, targetWorld);
+                    var mind = Polygon2.MinDistance(e.Value.Attributes.Bounds, e.Value.Location, targetWorld);
                     return mind == null || mind.Item2 < HEALING_STRIKE_RADIUS;
-                }).Select((e) => e.ID).ToArray();
+                }).Select((kvp) => kvp.Key).ToArray();
             }), new LinqSpellEffect((world, caster, targets) =>
             {
-                var indexOfCaster = world.Entities.FindIndex((e) => e.ID == caster.ID);
-                if (indexOfCaster < 0)
-                    return;
+                if (!world.Entities.ContainsKey(caster.ID))
+                    return; // weird state
 
-                world.Entities[indexOfCaster] = new Entity(caster, mana: caster.Mana - HEALING_STRIKE_MANA);
+                world.Entities[caster.ID] = new Entity(caster, mana: caster.Mana - HEALING_STRIKE_MANA);
 
                 foreach (var target in targets)
                 {
-
-                    var index = world.Entities.FindIndex((e) => e.ID == target);
-
-                    if (index < 0)
+                    Entity tarEnt;
+                    if (!world.Entities.TryGetValue(target, out tarEnt))
                         continue;
-
-                    var tarEnt = world.Entities[index];
                     if (tarEnt.ID == caster.ID)
                         continue;
                     if (tarEnt.Team != caster.Team)
                         continue;
 
                     float healing = HEALING_STRIKE_HEAL;
-                    caster = Logic.InformModifiers(world, caster, indexOfCaster, (mod) => mod.OnHealing(world, index, indexOfCaster, ref healing));
-                    tarEnt = Logic.InformModifiers(world, tarEnt, index, (mod) => mod.OnBeingHealed(world, indexOfCaster, index, ref healing));
+                    caster = Logic.InformModifiers(world, caster, (mod) => mod.OnHealing(world, target, caster.ID, ref healing));
+                    tarEnt = Logic.InformModifiers(world, tarEnt, (mod) => mod.OnBeingHealed(world, caster.ID, target, ref healing));
                     healing = Math.Max(healing, 0);
 
                     var newHP = Math.Min(tarEnt.Health + healing, tarEnt.Attributes.MaxHealth);
-                    world.Entities[index] = new Entity(tarEnt, health: newHP);
+                    world.Entities[target] = new Entity(tarEnt, health: newHP);
                 }
 
             }));
@@ -185,32 +174,26 @@ namespace IORPG.Game.Spells
                 if (caster.Mana < SHOOT_MANA)
                     return;
 
-                var indexOfCaster = world.Entities.FindIndex((e) => e.ID == caster.ID);
-                if (indexOfCaster < 0)
-                    return;
+                if (!world.Entities.ContainsKey(caster.ID))
+                    return; // weird state
 
-                world.Entities[indexOfCaster] = new Entity(caster, mana: caster.Mana - SHOOT_MANA);
+                world.Entities[caster.ID] = new Entity(caster, mana: caster.Mana - SHOOT_MANA);
 
                 foreach(var target in targets)
                 {
-                    var index = world.Entities.FindIndex((e) => e.ID == target);
-                    if (index < 0)
+                    Entity tarEnt;
+                    if (!world.Entities.TryGetValue(target, out tarEnt))
                         continue;
-
-                    var tarEnt = world.Entities[index];
                     if (!CheckRange(caster, tarEnt, SHOOT_RANGE))
                         continue;
 
                     float damage = SHOOT_DAMAGE;
-                    caster = Logic.InformModifiers(world, caster, indexOfCaster, (mod) => mod.OnDealingDamage(world, index, indexOfCaster, ref damage));
-                    tarEnt = Logic.InformModifiers(world, tarEnt, index, (mod) => mod.OnTakingDamage(world, indexOfCaster, index, ref damage));
+                    caster = Logic.InformModifiers(world, caster, (mod) => mod.OnDealingDamage(world, target, caster.ID, ref damage));
+                    tarEnt = Logic.InformModifiers(world, tarEnt, (mod) => mod.OnTakingDamage(world, caster.ID, target, ref damage));
                     damage = Math.Max(damage, 0);
-
-                    caster = world.Entities[indexOfCaster];
-                    tarEnt = world.Entities[index];
                     
 
-                    world.Entities[index] = new Entity(tarEnt, health: tarEnt.Health - damage);
+                    world.Entities[target] = new Entity(tarEnt, health: tarEnt.Health - damage);
                 }
             }));
         }
@@ -222,32 +205,26 @@ namespace IORPG.Game.Spells
                  if (caster.Mana < DELIBERATE_SHOT_MANA)
                      return;
 
-                 var indexOfCaster = world.Entities.FindIndex((e) => e.ID == caster.ID);
-                 if (indexOfCaster < 0)
-                     return;
+                if (!world.Entities.ContainsKey(caster.ID))
+                    return; // weird state
 
-                 world.Entities[indexOfCaster] = new Entity(caster, mana: caster.Mana - DELIBERATE_SHOT_MANA);
+                world.Entities[caster.ID] = new Entity(caster, mana: caster.Mana - DELIBERATE_SHOT_MANA);
 
                  foreach (var target in targets)
-                 {
-                     var index = world.Entities.FindIndex((e) => e.ID == target);
-                     if (index < 0)
-                         continue;
-
-                     var tarEnt = world.Entities[index];
-                     if (!CheckRange(caster, tarEnt, DELIBERATE_SHOT_RANGE))
+                {
+                    Entity tarEnt;
+                    if (!world.Entities.TryGetValue(target, out tarEnt))
+                        continue;
+                    if (!CheckRange(caster, tarEnt, DELIBERATE_SHOT_RANGE))
                          continue;
 
                      float damage = DELIBERATE_SHOT_DAMAGE;
-                     caster = Logic.InformModifiers(world, caster, indexOfCaster, (mod) => mod.OnDealingDamage(world, index, indexOfCaster, ref damage));
-                     tarEnt = Logic.InformModifiers(world, tarEnt, index, (mod) => mod.OnTakingDamage(world, indexOfCaster, index, ref damage));
+                     caster = Logic.InformModifiers(world, caster, (mod) => mod.OnDealingDamage(world, target, caster.ID, ref damage));
+                     tarEnt = Logic.InformModifiers(world, tarEnt, (mod) => mod.OnTakingDamage(world, caster.ID, target, ref damage));
                      damage = Math.Max(damage, 0);
 
-                     caster = world.Entities[indexOfCaster];
-                     tarEnt = world.Entities[index];
 
-
-                     world.Entities[index] = new Entity(tarEnt, health: tarEnt.Health - damage);
+                     world.Entities[target] = new Entity(tarEnt, health: tarEnt.Health - damage);
                  }
              }));
         }
@@ -259,29 +236,26 @@ namespace IORPG.Game.Spells
                 if (caster.Mana < PUSH_MANA)
                     return;
 
-                var indexOfCaster = world.Entities.FindIndex((e) => e.ID == caster.ID);
-                if (indexOfCaster < 0)
-                    return;
+                if (!world.Entities.ContainsKey(caster.ID))
+                    return; // weird state
 
-                world.Entities[indexOfCaster] = new Entity(caster, mana: caster.Mana - PUSH_MANA);
+                world.Entities[caster.ID] = new Entity(caster, mana: caster.Mana - PUSH_MANA);
 
                 foreach(var target in targets)
                 {
-                    var index = world.Entities.FindIndex((e) => e.ID == target);
-                    if (index < 0)
+                    Entity tarEnt;
+                    if (!world.Entities.TryGetValue(target, out tarEnt))
                         continue;
 
-                    var tarEnt = world.Entities[index];
-                    
                     // do range check here so we can reuse the vector
                     var minD = Polygon2.MinDistance(tarEnt.Attributes.Bounds, tarEnt.Location, caster.Attributes.Bounds.Center + caster.Location);
                     if (minD.Item2 > PUSH_RANGE)
                         continue;
 
                     var pushVec = minD.Item1 * (-(PUSH_END_RANGE - minD.Item2));
-
+                    
                     var newLoc = tarEnt.Location + pushVec;
-                    world.Entities[index] = Logic.DoMoveEntity(world, tarEnt, newLoc);
+                    world.Entities[target] = Logic.DoMoveEntity(world, tarEnt, newLoc, new System.Diagnostics.Stopwatch());
                 }
             }));
         }
@@ -293,11 +267,10 @@ namespace IORPG.Game.Spells
                 if (caster.Mana < BLOCK_MANA)
                     return;
 
-                var indexOfCaster = world.Entities.FindIndex((e) => e.ID == caster.ID);
-                if (indexOfCaster < 0)
-                    return;
+                if (!world.Entities.ContainsKey(caster.ID))
+                    return; // weird state
 
-                world.Entities[indexOfCaster] = new Entity(caster, mana: caster.Mana - BLOCK_MANA, modifiers: (Maybe<ImmutableList<IModifier>>)caster.Modifiers.Add(ModifierFactory.CreateBlockModifier()));
+                world.Entities[caster.ID] = new Entity(caster, mana: caster.Mana - BLOCK_MANA, modifiers: (Maybe<ImmutableList<IModifier>>)caster.Modifiers.Add(ModifierFactory.CreateBlockModifier()));
             }));
         }
     }

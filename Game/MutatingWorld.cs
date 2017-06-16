@@ -13,7 +13,7 @@ namespace IORPG.Game
 {
     public class MutatingWorld
     {
-        public List<Entity> Entities;
+        public Dictionary<int, Entity> Entities;
         public Dictionary<int, MutatingTeam> Teams;
         public int Timestamp;
         public int IDCounter;
@@ -28,7 +28,7 @@ namespace IORPG.Game
             Height = height;
             Timestamp = timestamp;
             IDCounter = idCounter;
-            Entities = new List<Entity>(predictedNumEntites);
+            Entities = new Dictionary<int, Entity>(predictedNumEntites);
             Teams = new Dictionary<int, MutatingTeam>();
             RandomGen = random;
             FinishedCallbacks = new List<Action>();
@@ -44,47 +44,44 @@ namespace IORPG.Game
 
         public void Add(Entity e)
         {
-            Entities.Add(e);
+            Entities.Add(e.ID, e);
 
             Teams[e.Team].Members.Add(e.ID);
         }
 
-        public void RemoveByIndex(int index)
+        public void RemoveByID(int id)
         {
-            var ent = Entities[index];
+            var ent = Entities[id];
             foreach (var nearbyID in ent.NearbyEntityIds)
             {
-                var nearbyEntIndex = Entities.FindIndex((e) => e.ID == nearbyID);
-                var nearbyEnt = Entities[nearbyEntIndex];
+                var nearbyEnt = Entities[nearbyID];
 
                 if (nearbyEnt.NearbyEntityIds.Contains(ent.ID))
                 {
-                    Entities[nearbyEntIndex] = new Entity(nearbyEnt, nearby: (Maybe<ImmutableHashSet<int>>)nearbyEnt.NearbyEntityIds.Remove(ent.ID));
+                    Entities[nearbyID] = new Entity(nearbyEnt, nearby: (Maybe<ImmutableHashSet<int>>)nearbyEnt.NearbyEntityIds.Remove(ent.ID));
                 }
             }
             Teams[ent.Team].Members.Remove(ent.ID);
-            Entities.RemoveAt(index);
-        }
-
-        public void RemoveByID(int id)
-        {
-            RemoveByIndex(Entities.FindIndex((e) => e.ID == id));
+            Entities.Remove(id);
         }
 
         public Entity GetByID(int id)
         {
-            return Entities.Find((e) => e.ID == id);
+            return Entities[id];
         }
 
         public World AsReadOnly()
         {
+            var entities = new List<Entity>();
             var idsToIndexes = new Dictionary<int, int>();
-            for(int i = 0; i < Entities.Count; i++)
+            
+            foreach(var id in Entities.Keys)
             {
-                idsToIndexes.Add(Entities[i].ID, i);
+                entities.Add(Entities[id]);
+                idsToIndexes.Add(id, entities.Count - 1);
             }
 
-            return new World(Width, Height, Timestamp, IDCounter, Entities.AsReadOnly(), new ReadOnlyDictionary<int, int>(idsToIndexes), DictUtils.FromEnumerable(Teams.Select((kvp) => new KeyValuePair<int, Team>(kvp.Key, kvp.Value.AsReadOnly()))));
+            return new World(Width, Height, Timestamp, IDCounter, entities.ToImmutableList(), new ReadOnlyDictionary<int, int>(idsToIndexes), DictUtils.FromEnumerable(Teams.Select((kvp) => new KeyValuePair<int, Team>(kvp.Key, kvp.Value.AsReadOnly()))));
         }
     }
 }

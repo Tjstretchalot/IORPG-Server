@@ -66,6 +66,8 @@ namespace IORPG.Networking
 
         public void SendTick(World world)
         {
+            if (State != WebSocketState.Open)
+                return;
             if(_UserState == UserState.SPAWNED)
             {
                 if(RequestedTicksPerSentTick != 1)
@@ -153,7 +155,7 @@ namespace IORPG.Networking
                         break;
                     case START_MOVE:
                         if (_UserState != UserState.SPAWNED)
-                            throw new InvalidProgramException($"STAR_MOVE recieved when userstate={_UserState}");
+                            throw new InvalidProgramException($"START_MOVE recieved when userstate={_UserState}");
                         dir = (int)parsed[1];
                         switch(dir)
                         {
@@ -506,7 +508,7 @@ namespace IORPG.Networking
                 if (_DownPressed)
                     newVelocity.Y++;
 
-                newVelocity *= 0.1f;
+                newVelocity *= Entity.Attributes.Speed;
             }
             var mut = new EntityChangeVelocityMutation(Entity.ID, newVelocity);
             Program.QueuedMutations[mut.Time].Enqueue(mut);
@@ -520,16 +522,28 @@ namespace IORPG.Networking
 
         void ForceDisconnect()
         {
-            Sessions.CloseSession(ID);
+            if(State != WebSocketState.Closed && State != WebSocketState.Closing)
+                Sessions.CloseSession(ID);
         }
 
         void OnDisconnect()
+        {
+            DestroyEntity();
+        }
+
+        void OnError()
+        {
+            DestroyEntity();
+        }
+
+        void DestroyEntity()
         {
             switch (_UserState)
             {
                 case UserState.SPAWNED:
                     var mutation = new EntityRemovedMutation(Entity.ID);
                     Program.QueuedMutations[mutation.Time].Enqueue(mutation);
+                    _UserState = UserState.CLOSED;
                     break;
                 case UserState.SPAWNING:
                 case UserState.NOT_YET_SPAWNED:

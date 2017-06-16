@@ -5,6 +5,7 @@ using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Collections.Immutable;
+using System.Diagnostics;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
@@ -40,6 +41,8 @@ namespace IORPG.Game.Mutations
 
         public void Apply(MutatingWorld world)
         {
+            var watch = new Stopwatch();
+            watch.Start();
             var spawnBounds = SpawnBounds;
             var team = Team;
             if (team == -1)
@@ -47,15 +50,10 @@ namespace IORPG.Game.Mutations
                 MutatingTeam teamObj = null;
                 foreach (var teamkvp in world.Teams)
                 {
-                    if (teamkvp.Value.LastSpawnTimeMS == 0)
+                    if (teamObj == null || teamkvp.Value.Members.Count < teamObj.Members.Count)
                     {
                         team = teamkvp.Key;
-                        break;
-                    }
-                    else if (teamObj == null || teamkvp.Value.LastSpawnTimeMS < teamObj.LastSpawnTimeMS)
-                    {
                         teamObj = teamkvp.Value;
-                        team = teamkvp.Key;
                     }
                 }
                 world.Teams[team].LastSpawnTimeMS = world.Timestamp;
@@ -73,15 +71,15 @@ namespace IORPG.Game.Mutations
                 var done = true;
                 while (true)
                 {
-                    var inter = world.Entities.Select((e) => Tuple.Create(e, Polygon2.IntersectMTV(e.Attributes.Bounds, Attributes.Bounds, e.Location, spawnLoc))).FirstOrDefault((tup) => tup.Item2 != null);
+                    var inter = world.Entities.Select((e) => Tuple.Create(e, Polygon2.IntersectMTV(e.Value.Attributes.Bounds, Attributes.Bounds, e.Value.Location, spawnLoc))).FirstOrDefault((tup) => tup.Item2 != null);
                     if (inter != null)
                     {
-                        if(alreadyCollidedIds.Contains(inter.Item1.ID))
+                        if(alreadyCollidedIds.Contains(inter.Item1.Key))
                         {
                             break;
                         }
 
-                        alreadyCollidedIds.Add(inter.Item1.ID);
+                        alreadyCollidedIds.Add(inter.Item1.Key);
                         spawnLoc += inter.Item2.Item1 * (inter.Item2.Item2 * 1.1f);
                         done = false;
                     }else
@@ -96,29 +94,32 @@ namespace IORPG.Game.Mutations
 
             var entId = world.IDCounter++;
             var nearbyBounds = Logic.NEARBY_BOUNDS;
-            var nearby = new ConcurrentQueue<Tuple<int, int>>(); 
-            Parallel.ForEach(world.Entities, (value, pls, index) =>
+            var nearby = new HashSet<int>(); 
+            foreach(var kvp in world.Entities)
             {
-                if (Rect2.Intersects(value.Attributes.Bounds.AABB, nearbyBounds, value.Location, spawnLoc, true))
+                if (Rect2.Intersects(kvp.Value.Attributes.Bounds.AABB, nearbyBounds, kvp.Value.Location, spawnLoc, true))
                 {
-                    nearby.Enqueue(Tuple.Create(value.ID, (int)index));
-
+                    nearby.Add(kvp.Key);
                 }
-            });
+            }
 
-            foreach(var ele in nearby)
+            foreach(var id in nearby)
             {
-                var id = ele.Item1;
-                var ind = ele.Item2;
-                var e = world.Entities[ind];
-                world.Entities[ind] = new Entity(e, nearby: (Maybe<ImmutableHashSet<int>>)e.NearbyEntityIds.Add(entId));
+                var e = world.Entities[id];
+                world.Entities[id] = new Entity(e, nearby: (Maybe<ImmutableHashSet<int>>)e.NearbyEntityIds.Add(entId));
             }
 
             var ent = new Entity(entId, team, Name, Attributes, spawnLoc, Vector2.Zero, Attributes.MaxHealth, Attributes.MaxMana, null,
-                ImmutableDictionary.Create<int, int>(), ImmutableHashSet.CreateRange(nearby.Select((tup) => tup.Item1)),
-                ImmutableList<IModifier>.Empty);
+                ImmutableDictionary.Create<int, int>(), nearby.ToImmutableHashSet(), ImmutableList<IModifier>.Empty);
             world.Add(ent);
             world.FinishedCallbacks.Add(() => Callback?.Invoke(ent));
+
+            watch.Stop();
+            var elapsedMS = watch.ElapsedMilliseconds;
+            if(elapsedMS > 2)
+            {
+                Console.WriteLine($"Took a long time to spawn new entity! ({elapsedMS} ms)");
+            }
         }
     }
 }

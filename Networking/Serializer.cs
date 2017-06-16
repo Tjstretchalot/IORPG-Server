@@ -84,6 +84,7 @@ namespace IORPG.Networking
             var entities = new[] { user.ID }.Concat(user.NearbyEntityIds).Select((id) => world.GetByID(id));
             var result = new Dictionary<string, object>();
 
+            result.Add("interpolation_factor", Program.GAME_SPEED_MULTIPLIER);
             result.Add("timestamp", world.Timestamp);
             result.Add("width", world.Width);
             result.Add("height", world.Height);

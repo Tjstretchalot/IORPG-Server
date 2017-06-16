@@ -23,12 +23,11 @@ namespace IORPG.Game.Mutations
 
         public void Apply(MutatingWorld world)
         {
-            var entityIndex = world.Entities.FindIndex((e) => e.ID == EntityID);
-            if (entityIndex < 0)
+            Entity entity;
+            if (!world.Entities.TryGetValue(EntityID, out entity))
                 return;
-
-            var entity = world.Entities[entityIndex];
-            world.Entities[entityIndex] = new Entity(entity, spell: (Maybe<SpellInfo>) Spell);
+            
+            world.Entities[EntityID] = new Entity(entity, spell: (Maybe<SpellInfo>) Spell);
         }
     }
 }

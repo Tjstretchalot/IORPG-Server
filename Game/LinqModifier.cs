@@ -6,7 +6,7 @@ using System.Threading.Tasks;
 
 namespace IORPG.Game
 {
-    public delegate IModifier ModifierOnThingHappened(IModifier me, MutatingWorld world, int otherEntIndex, int parentIndex, ref float amount);
+    public delegate IModifier ModifierOnThingHappened(IModifier me, MutatingWorld world, int otherEntID, int parentID, ref float amount);
 
     public class LinqModifier : IModifier
     {
@@ -42,29 +42,29 @@ namespace IORPG.Game
             SerializeDelegate = Serialize;
         }
 
-        public IModifier OnTicking(int parentIndex, int deltaMS)
+        public IModifier OnTicking(int parentID, int deltaMS)
         {
-            return OnTickingDelegate == null ? this : OnTickingDelegate(this, parentIndex, deltaMS);
+            return OnTickingDelegate == null ? this : OnTickingDelegate(this, parentID, deltaMS);
         }
 
-        public IModifier OnTakingDamage(MutatingWorld world, int attackerIndex, int parentIndex, ref float amount)
+        public IModifier OnTakingDamage(MutatingWorld world, int attackerID, int parentID, ref float amount)
         {
-            return OnTakingDamageDelegate == null ? this : OnTakingDamageDelegate(this, world, attackerIndex, parentIndex, ref amount);
+            return OnTakingDamageDelegate == null ? this : OnTakingDamageDelegate(this, world, attackerID, parentID, ref amount);
         }
 
-        public IModifier OnDealingDamage(MutatingWorld world, int attackedIndex, int parentIndex, ref float amount)
+        public IModifier OnDealingDamage(MutatingWorld world, int attackedID, int parentID, ref float amount)
         {
-            return OnDealingDamageDelegate == null ? this : OnDealingDamageDelegate(this, world, attackedIndex, parentIndex, ref amount);
+            return OnDealingDamageDelegate == null ? this : OnDealingDamageDelegate(this, world, attackedID, parentID, ref amount);
         }
 
-        public IModifier OnBeingHealed(MutatingWorld world, int healerIndex, int parentIndex, ref float amount)
+        public IModifier OnBeingHealed(MutatingWorld world, int healerID, int parentID, ref float amount)
         {
-            return OnBeingHealedDelegate == null ? this : OnBeingHealedDelegate(this, world, healerIndex, parentIndex, ref amount);
+            return OnBeingHealedDelegate == null ? this : OnBeingHealedDelegate(this, world, healerID, parentID, ref amount);
         }
 
-        public IModifier OnHealing(MutatingWorld world, int healedIndex, int parentIndex, ref float amount)
+        public IModifier OnHealing(MutatingWorld world, int healedID, int parentID, ref float amount)
         {
-            return OnHealingDelegate == null ? this : OnHealingDelegate(this, world, healedIndex, parentIndex, ref amount);
+            return OnHealingDelegate == null ? this : OnHealingDelegate(this, world, healedID, parentID, ref amount);
         }
 
         public Dictionary<string, object> Serialize()

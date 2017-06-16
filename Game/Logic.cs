@@ -9,6 +9,7 @@ using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Collections.Immutable;
 using System.Collections.ObjectModel;
+using System.Diagnostics;
 using System.Linq;
 using System.Text;
 using System.Threading;
@@ -33,40 +34,44 @@ namespace IORPG.Game
         /// <param name="loc">The desired location of the entity</param>
         /// <param name="isLargeMovement">If the entity might intersect entities that aren't in its EntityNearbyIds</param>
         /// <returns>The entity after attempting to move it to loc</returns>
-        public static Entity DoMoveEntity(MutatingWorld world, Entity entity, Vector2 loc, bool isLargeMovement = false)
+        public static Entity DoMoveEntity(MutatingWorld world, Entity entity, Vector2 loc, Stopwatch watch, bool isLargeMovement = false)
         {
             loc.X = Math.Min(Math.Max(loc.X, 0), world.Width - entity.Attributes.Bounds.AABB.Width);
             loc.Y = Math.Min(Math.Max(loc.Y, 0), world.Height - entity.Attributes.Bounds.AABB.Height);
             int entId = entity.ID;
             HashSet<int> ignoreIds = null;
             
-            IEnumerable<int> potentialCollisionIndexes;
+            IEnumerable<int> potentialCollisionIds;
             if(isLargeMovement)
             {
                 var potColIds = new ConcurrentQueue<int>();
                 Parallel.ForEach(world.Entities, (value, pls, index) =>
                 {
-                    if (value.ID != entId && Rect2.Intersects(value.Attributes.Bounds.AABB, NEARBY_BOUNDS, value.Location, loc, true))
+                    if (value.Key != entId && Rect2.Intersects(value.Value.Attributes.Bounds.AABB, NEARBY_BOUNDS, value.Value.Location, loc, true))
                     {
-                        potColIds.Enqueue((int)index);
+                        potColIds.Enqueue(value.Key);
                     }
                 });
-                potentialCollisionIndexes = potColIds;
+                potentialCollisionIds = potColIds;
             }else
             {
-                potentialCollisionIndexes = entity.NearbyEntityIds.Select((id) => world.Entities.FindIndex((e) => e.ID == id));
+                potentialCollisionIds = entity.NearbyEntityIds;
             }
 
+            watch.Start();
             while (true)
             {
                 int collidingId = -1;
                 Tuple<Vector2, float> collidingMTV = null;
 
-                foreach(var potentialCollidingEntityIndexInEntities in potentialCollisionIndexes)
+                foreach(var potentialCollidingEntityID in potentialCollisionIds)
                 {
-                    var potentialCollidingEntity = world.Entities[potentialCollidingEntityIndexInEntities];
+                    var potentialCollidingEntity = world.Entities[potentialCollidingEntityID];
                     if (potentialCollidingEntity.ID != entId && (ignoreIds == null || !ignoreIds.Contains(potentialCollidingEntity.ID)))
                     {
+                        if (!Rect2.Intersects(entity.Attributes.Bounds.AABB, potentialCollidingEntity.Attributes.Bounds.AABB, entity.Location, potentialCollidingEntity.Location, true))
+                            continue;
+
                         var mtv = Polygon2.IntersectMTV(entity.Attributes.Bounds, potentialCollidingEntity.Attributes.Bounds, loc, potentialCollidingEntity.Location);
 
                         if (mtv != null)
@@ -93,30 +98,56 @@ namespace IORPG.Game
                     break;
                 }
             }
-
-            var nearbyIds = new ConcurrentQueue<Tuple<int, int>>();
-            Parallel.ForEach(world.Entities, (value, pls, index) =>
+            watch.Stop();
+            var elapsed = watch.ElapsedMilliseconds;
+            if(elapsed > 2)
             {
-                if (value.ID != entId && Rect2.Intersects(value.Attributes.Bounds.AABB, NEARBY_BOUNDS, value.Location, loc, true))
-                {
-                    nearbyIds.Enqueue(Tuple.Create(value.ID, (int)index));
-                }
-            });
-            
-            foreach(var nearby in nearbyIds)
-            {
-                var ent = world.Entities[nearby.Item2];
+                Console.WriteLine($"Took a long time to resolve collisions: {elapsed} ms");
+            }
 
-                if(!ent.NearbyEntityIds.Contains(entId))
+            watch.Start();
+            var nearbyIds = new HashSet<int>();
+            var keys = new List<int>(world.Entities.Keys);
+            foreach(var id in keys)
+            {
+                var e = world.Entities[id];
+                if(e.ID != entId && Rect2.Intersects(e.Attributes.Bounds.AABB, NEARBY_BOUNDS, e.Location, loc, true))
                 {
-                    world.Entities[nearby.Item2] = new Entity(ent, nearby: (Maybe<ImmutableHashSet<int>>)ent.NearbyEntityIds.Add(entId));
+                    nearbyIds.Add(e.ID);
                 }
             }
 
-            return new Entity(entity, location: loc, nearby: (Maybe<ImmutableHashSet<int>>)ImmutableHashSet.CreateRange(nearbyIds.Select((tup) => tup.Item1)));
+            foreach(var oldNearby in entity.NearbyEntityIds)
+            {
+                if(!nearbyIds.Contains(oldNearby))
+                {
+                    Entity oldEnt;
+                    if(world.Entities.TryGetValue(oldNearby, out oldEnt))
+                    {
+                        world.Entities[oldNearby] = new Entity(oldEnt, nearby: (Maybe<ImmutableHashSet<int>>)oldEnt.NearbyEntityIds.Remove(entId));
+                    }
+                }
+            }
+            
+            foreach(var nearby in nearbyIds)
+            {
+                var ent = world.Entities[nearby];
+
+                if(!ent.NearbyEntityIds.Contains(entId))
+                {
+                    world.Entities[nearby] = new Entity(ent, nearby: (Maybe<ImmutableHashSet<int>>)ent.NearbyEntityIds.Add(entId));
+                }
+            }
+            watch.Stop();
+            elapsed = watch.ElapsedMilliseconds;
+            if(elapsed > 3)
+            {
+                Console.WriteLine($"Took a long time to update nearby: {elapsed} ms");
+            }
+            return new Entity(entity, location: loc, nearby: (Maybe<ImmutableHashSet<int>>)nearbyIds.ToImmutableHashSet());
         }
 
-        public static Entity InformModifiers(MutatingWorld world, Entity entity, int entIndex, Func<IModifier, IModifier> modFunc)
+        public static Entity InformModifiers(MutatingWorld world, Entity entity, Func<IModifier, IModifier> modFunc)
         {
             if (entity.Modifiers.Count > 0)
             {
@@ -131,21 +162,21 @@ namespace IORPG.Game
                     }
                 }
 
-                world.Entities[entIndex] = new Entity(world.Entities[entIndex], modifiers: (Maybe<ImmutableList<IModifier>>)ImmutableList.CreateRange(newModifiers));
+                world.Entities[entity.ID] = new Entity(world.Entities[entity.ID], modifiers: (Maybe<ImmutableList<IModifier>>)ImmutableList.CreateRange(newModifiers));
             }
 
-            return world.Entities[entIndex];
+            return world.Entities[entity.ID];
         }
 
-        public static Entity SimulateTimePassing(MutatingWorld world, Entity entity, int entIndex, int timeMS)
+        public static Entity SimulateTimePassing(MutatingWorld world, Entity entity, int timeMS, Stopwatch watch)
         {
-            entity = InformModifiers(world, entity, entIndex, (mod) => mod.OnTicking(entIndex, timeMS));
+            entity = InformModifiers(world, entity, (mod) => mod.OnTicking(entity.ID, timeMS));
 
             if(entity.Mana != entity.Attributes.MaxMana && entity.Attributes.ManaRegen > 0)
             {
                 var newMana = (float)(entity.Mana + (double)entity.Attributes.ManaRegen * timeMS); // up precision before addition because numbers are way different
                 entity = new Entity(entity, mana: Math.Min(entity.Attributes.MaxMana, newMana));
-                world.Entities[entIndex] = entity;
+                world.Entities[entity.ID] = entity;
             }
             if (entity.Spell != null)
             {
@@ -154,7 +185,7 @@ namespace IORPG.Game
                 if(timeRemaining <= 0)
                 {
                     entity.Spell.SpellEffect.OnCast(world, entity, entity.Spell.SpellTargeter.GetTargets(world));
-                    entity = world.Entities[entIndex]; // in case the entity was mutated
+                    entity = world.Entities[entity.ID]; // in case the entity was mutated
                     entity = new Entity(entity, spell: new Maybe<SpellInfo>(null)); 
                 }else
                 {
@@ -168,7 +199,7 @@ namespace IORPG.Game
 
             var loc = entity.Location + entity.Velocity * timeMS;
 
-            return DoMoveEntity(world, entity, loc);
+            return DoMoveEntity(world, entity, loc, watch);
         }
 
         public static MutatingWorld SimulateTimePassing(World world, Random random, ConcurrentDictionary<WorldMutationTime, ConcurrentQueue<IWorldMutation>> mutations, int timeMS)
@@ -195,17 +226,20 @@ namespace IORPG.Game
                     }
                 }
             }
-
-            for(int i = 0; i < mutating.Entities.Count; i++)
+            
+            var watch = new Stopwatch();
+            var keys = new List<int>(mutating.Entities.Keys);
+            foreach (var id in keys)
             {
-                mutating.Entities[i] = SimulateTimePassing(mutating, mutating.Entities[i], i, timeMS);
+                mutating.Entities[id] = SimulateTimePassing(mutating, mutating.Entities[id], timeMS, watch);
+                watch.Reset();
             }
 
-            for(int i = mutating.Entities.Count - 1; i >= 0; i--)
+            foreach(int id in keys)
             {
-                if(mutating.Entities[i].Health <= 0)
+                if(mutating.Entities[id].Health <= 0)
                 {
-                    mutating.RemoveByIndex(i);
+                    mutating.RemoveByID(id);
                 }
             }
 

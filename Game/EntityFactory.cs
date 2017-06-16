@@ -28,8 +28,8 @@ namespace IORPG.Game
             new Vector2(PRIEST_SIZE, PRIEST_SIZE - RADIUS), new Vector2(PRIEST_SIZE - RADIUS, PRIEST_SIZE), new Vector2(RADIUS, PRIEST_SIZE),
             new Vector2(0, PRIEST_SIZE - RADIUS), new Vector2(0, RADIUS) });
 
-        public static EntityAttributes WARRIOR_ATTRIBUTES = new EntityAttributes(UnitType.Warrior, WARRIOR_BOUNDS, 0.01f, 100, 50, 0.0005f);
-        public static EntityAttributes HUNTER_ATTRIBUTES = new EntityAttributes(UnitType.Hunter, HUNTER_BOUNDS, 0.015f, 50, 50, 0.0005f);
-        public static EntityAttributes PRIEST_ATTRIBUTES = new EntityAttributes(UnitType.Priest, PRIEST_BOUNDS, 0.01f, 50, 100, 0.002f);
+        public static EntityAttributes WARRIOR_ATTRIBUTES = new EntityAttributes(UnitType.Warrior, WARRIOR_BOUNDS, 0.2f, 100, 50, 0.0005f);
+        public static EntityAttributes HUNTER_ATTRIBUTES = new EntityAttributes(UnitType.Hunter, HUNTER_BOUNDS, 0.1f, 50, 50, 0.0005f);
+        public static EntityAttributes PRIEST_ATTRIBUTES = new EntityAttributes(UnitType.Priest, PRIEST_BOUNDS, 0.1f, 50, 100, 0.002f);
     }
 }

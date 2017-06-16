@@ -16,11 +16,11 @@ namespace IORPG.Game
         int DurationRemainingMS { get; }
         int DurationTotalMS { get; }
 
-        IModifier OnTicking(int parentIndex, int deltaMS);
-        IModifier OnTakingDamage(MutatingWorld world, int attackerIndex, int parentIndex, ref float amount);
-        IModifier OnDealingDamage(MutatingWorld world, int attackedIndex, int parentIndex, ref float amount);
-        IModifier OnBeingHealed(MutatingWorld world, int healerIndex, int parentIndex, ref float amount);
-        IModifier OnHealing(MutatingWorld world, int healedIndex, int parentIndex, ref float amount);
+        IModifier OnTicking(int parentID, int deltaMS);
+        IModifier OnTakingDamage(MutatingWorld world, int attackerID, int parentID, ref float amount);
+        IModifier OnDealingDamage(MutatingWorld world, int attackedID, int parentID, ref float amount);
+        IModifier OnBeingHealed(MutatingWorld world, int healerID, int parentID, ref float amount);
+        IModifier OnHealing(MutatingWorld world, int healedID, int parentID, ref float amount);
 
         Dictionary<string, object> Serialize();
     }

@@ -20,9 +20,8 @@ namespace IORPG.Game.Mutations
 
         public void Apply(MutatingWorld world)
         {
-            var ind = world.Entities.FindIndex((e) => e.ID == ID);
-            if (ind >= 0)
-                world.RemoveByIndex(ind);
+            if (world.Entities.ContainsKey(ID))
+                world.RemoveByID(ID);
         }
     }
 }

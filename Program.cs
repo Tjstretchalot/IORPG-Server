@@ -18,6 +18,8 @@ namespace IORPG
 {
     public class Program
     {
+        public const int GAME_SPEED_MULTIPLIER = 2;
+
         public static void Main(string[] args)
         {
             Console.WriteLine("====IORPG Server====");
@@ -89,10 +91,18 @@ namespace IORPG
                     case 't':
                         var world = State.World;
                         int tickSpeed = RecentTickTimesSum / RecentTickTimes.Count;
+
+                        int totalNumNearby = 0;
+                        foreach(var e in world.Entities)
+                        {
+                            totalNumNearby += e.NearbyEntityIds.Count;
+                        }
+                        float avgNearby = world.Entities.Count == 0 ? 0 : (totalNumNearby / world.Entities.Count);
                         Console.WriteLine("==Logic Thread Tick Rate==");
                         Console.WriteLine($"Time per tick: ~{tickSpeed}ms/tick");
                         Console.WriteLine($"Behind by ~{MissedUpdateMS}ms");
                         Console.WriteLine($"There are {world.Entities.Count} entities");
+                        Console.WriteLine($"On average, each entity has {avgNearby} nearby entities");
                         Console.WriteLine();
                         break;
                     case 'l':
@@ -151,7 +161,7 @@ namespace IORPG
             {
                 var desiredMs = DesiredTickRate;
                 watch.Restart();
-                var mut = Logic.SimulateTimePassing(State.World, random, QueuedMutations, desiredMs);
+                var mut = Logic.SimulateTimePassing(State.World, random, QueuedMutations, desiredMs * GAME_SPEED_MULTIPLIER);
                 State.World = mut.AsReadOnly();
                 foreach(var cb in mut.FinishedCallbacks)
                 {
@@ -235,9 +245,16 @@ namespace IORPG
             }
 
             var host = wssv.WebSocketServices["/Play"];
+            int counter = 0;
             while (!StopRequested)
             {
                 Thread.Sleep(100);
+                counter++;
+                if(counter >= 50)
+                {
+                    counter = 0;
+                    host.Sessions.Sweep();
+                }
 
                 if (Interlocked.CompareExchange(ref ShouldSendTick, 0, 1) == 1)
                 {
@@ -248,6 +265,7 @@ namespace IORPG
                         playSess.SendTick(world);
                     }
                 }
+                
             }
 
             wssv.Stop();
